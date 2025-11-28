@@ -1,169 +1,173 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Word to PDF Converter</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Word → PDF (Images + Tables support)</title>
 
-<!-- Google Fonts -->
+<!-- Google Font -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 
-<!-- Mammoth.js -->
+<!-- Mammoth (DOCX -> HTML, with image support) -->
 <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
 
-<!-- jsPDF -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- html2pdf (html -> canvas -> pdf using html2canvas + jsPDF) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
 
 <style>
-    body {
-        font-family: 'Inter', sans-serif;
-        background: #f5f6fa;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-    }
-
-    .container {
-        background: #ffffff;
-        width: 90%;
-        max-width: 480px;
-        padding: 30px;
-        border-radius: 16px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-
-    h2 {
-        margin-bottom: 10px;
-        font-weight: 600;
-    }
-
-    p {
-        color: #555;
-        font-size: 14px;
-        margin-bottom: 25px;
-    }
-
-    #drop-zone {
-        border: 2px dashed #6c63ff;
-        border-radius: 12px;
-        padding: 40px;
-        cursor: pointer;
-        transition: 0.3s;
-        background: #fafaff;
-    }
-
-    #drop-zone:hover {
-        background: #f0f0ff;
-    }
-
-    #drop-zone.dragover {
-        background: #e0e0ff;
-    }
-
-    button {
-        margin-top: 20px;
-        padding: 12px 20px;
-        background: #6c63ff;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 16px;
-        cursor: pointer;
-        width: 100%;
-        font-weight: 600;
-    }
-
-    button:disabled {
-        background: #ccc;
-        cursor: not-allowed;
-    }
-
-    #status {
-        margin-top: 15px;
-        font-size: 14px;
-        color: #444;
-    }
+  body { font-family: 'Inter', sans-serif; background:#f6f7fb; margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card { width:100%; max-width:760px; background:#fff; border-radius:14px; padding:26px; box-shadow:0 8px 30px rgba(20,20,50,0.06); }
+  h1 { margin:0 0 8px 0; font-size:22px; }
+  p.lead { color:#555; margin:0 0 18px 0; }
+  #drop { border:2px dashed #7b6cff; border-radius:12px; padding:36px; text-align:center; background:#fafaff; cursor:pointer; }
+  #drop.dragover { background:#f0f0ff; }
+  #convert { margin-top:18px; width:100%; padding:12px; background:#6c63ff; color:#fff; border:none; border-radius:10px; font-weight:600; cursor:pointer; }
+  #convert:disabled { background:#bfbaf5; cursor:not-allowed; }
+  #status { margin-top:12px; color:#444; }
+  /* hidden preview area - used as source for pdf */
+  #renderArea { display:none; max-width:800px; margin: 18px auto; background:#fff; padding:20px; box-shadow:0 6px 18px rgba(0,0,0,0.06); }
 </style>
-
 </head>
 <body>
+  <div class="card">
+    <h1>Word → PDF Converter</h1>
+    <p class="lead">No upload. Conversion happens 100% in your browser. This improved version supports images and tables.</p>
 
-<div class="container">
-    <h2>Word to PDF Converter</h2>
-    <p>No upload — conversion happens 100% in your browser.</p>
-
-    <div id="drop-zone">
-        <strong>Click or Drag & Drop a .docx file here</strong>
-    </div>
-
-    <button id="convertBtn" disabled>Convert to PDF</button>
-
+    <div id="drop">Click or drag & drop a <strong>.docx</strong> file here</div>
+    <button id="convert" disabled>Convert to PDF</button>
     <div id="status"></div>
-</div>
+
+    <!-- This hidden area receives HTML from mammoth and is the source for html2pdf -->
+    <div id="renderArea"></div>
+  </div>
 
 <script>
-    let selectedFile = null;
+  const drop = document.getElementById('drop');
+  const convertBtn = document.getElementById('convert');
+  const status = document.getElementById('status');
+  const renderArea = document.getElementById('renderArea');
 
-    const dropZone = document.getElementById("drop-zone");
-    const convertBtn = document.getElementById("convertBtn");
-    const statusText = document.getElementById("status");
+  let selectedFile = null;
 
-    dropZone.onclick = () => {
-        let input = document.createElement("input");
-        input.type = "file";
-        input.accept = ".docx";
-        input.onchange = e => {
-            selectedFile = e.target.files[0];
-            dropZone.innerHTML = selectedFile.name;
-            convertBtn.disabled = false;
-        };
-        input.click();
+  // create file input when drop area clicked
+  drop.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.docx';
+    input.onchange = e => {
+      if (e.target.files && e.target.files[0]) {
+        handleFile(e.target.files[0]);
+      }
     };
+    input.click();
+  });
 
-    dropZone.addEventListener("dragover", e => {
-        e.preventDefault();
-        dropZone.classList.add("dragover");
+  // drag & drop events
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('dragover');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+
+  function handleFile(file) {
+    selectedFile = file;
+    drop.innerHTML = `<strong>${escapeHtml(file.name)}</strong>`;
+    convertBtn.disabled = false;
+    status.textContent = '';
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"'`=\/]/g, function (c) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'}[c];
     });
+  }
 
-    dropZone.addEventListener("dragleave", () => {
-        dropZone.classList.remove("dragover");
-    });
+  // Convert and download
+  convertBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    convertBtn.disabled = true;
+    status.textContent = 'Converting... please wait (this may take a few seconds for large files).';
+    renderArea.style.display = 'block';
+    renderArea.innerHTML = ''; // clear previous
 
-    dropZone.addEventListener("drop", e => {
-        e.preventDefault();
-        dropZone.classList.remove("dragover");
-        selectedFile = e.dataTransfer.files[0];
-        dropZone.innerHTML = selectedFile.name;
-        convertBtn.disabled = false;
-    });
+    try {
+      const arrayBuffer = await selectedFile.arrayBuffer();
 
-    async function convertToPDF() {
-        if (!selectedFile) return;
+      // Mammoth options: inline images by converting to base64 data URIs
+      const mammothOptions = {
+        convertImage: mammoth.images.inline(function(element) {
+          return element.read("base64").then(function(imageBuffer) {
+            return { src: "data:" + element.contentType + ";base64," + imageBuffer };
+          });
+        }),
+        // styleMap can be added here for custom mappings if needed
+      };
 
-        statusText.innerHTML = "Converting... please wait.";
+      const result = await mammoth.convertToHtml({ arrayBuffer }, mammothOptions);
 
-        const arrayBuffer = await selectedFile.arrayBuffer();
-        const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
+      // result.value contains the generated HTML string
+      // Insert it inside a container we will render to PDF
+      const wrapper = document.createElement('div');
+      wrapper.style.padding = '18px';
+      wrapper.style.fontFamily = 'serif';
+      wrapper.innerHTML = result.value;
 
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({ unit: "pt", format: "a4" });
+      // Some basic tweaks to improve rendering
+      // Limit images to page width
+      wrapper.querySelectorAll('img').forEach(img => {
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+      });
 
-        pdf.html(htmlResult.value, {
-            callback: function (pdf) {
-                pdf.save(selectedFile.name.replace(".docx", ".pdf"));
-                statusText.innerHTML = "Done! PDF downloaded 🎉";
-            },
-            x: 20,
-            y: 20
-        });
+      // Tables styling for html2pdf
+      wrapper.querySelectorAll('table').forEach(tbl => {
+        tbl.style.width = '100%';
+        tbl.style.borderCollapse = 'collapse';
+      });
+      wrapper.querySelectorAll('td, th').forEach(cell => {
+        cell.style.border = '1px solid #ddd';
+        cell.style.padding = '6px';
+      });
+
+      // Add filename header (optional) so user can see document name in preview
+      const title = document.createElement('div');
+      title.style.textAlign = 'center';
+      title.style.marginBottom = '12px';
+      title.innerHTML = `<strong>${escapeHtml(selectedFile.name)}</strong>`;
+      renderArea.appendChild(title);
+      renderArea.appendChild(wrapper);
+
+      // Use html2pdf to convert DOM -> PDF
+      const opt = {
+        margin: 10,
+        filename: selectedFile.name.replace(/\.docx$/i, '.pdf'),
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
+      };
+
+      // Give the browser a moment to render DOM before capturing
+      await new Promise(r => setTimeout(r, 250));
+
+      await html2pdf().set(opt).from(renderArea).save();
+
+      status.textContent = 'Done — PDF downloaded.';
+    } catch (err) {
+      console.error(err);
+      status.textContent = 'Conversion failed: ' + (err && err.message ? err.message : String(err));
+      alert('Conversion error — see console for details.');
+    } finally {
+      convertBtn.disabled = false;
+      // hide the preview area again to remain consistent with previous UI
+      renderArea.style.display = 'none';
     }
-
-    convertBtn.onclick = convertToPDF;
+  });
 </script>
-
 </body>
 </html>
