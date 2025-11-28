@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Word to PDF Converter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+<!-- Mammoth.js -->
+<script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+    body {
+        font-family: 'Inter', sans-serif;
+        background: #f5f6fa;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+
+    .container {
+        background: #ffffff;
+        width: 90%;
+        max-width: 480px;
+        padding: 30px;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+
+    h2 {
+        margin-bottom: 10px;
+        font-weight: 600;
+    }
+
+    p {
+        color: #555;
+        font-size: 14px;
+        margin-bottom: 25px;
+    }
+
+    #drop-zone {
+        border: 2px dashed #6c63ff;
+        border-radius: 12px;
+        padding: 40px;
+        cursor: pointer;
+        transition: 0.3s;
+        background: #fafaff;
+    }
+
+    #drop-zone:hover {
+        background: #f0f0ff;
+    }
+
+    #drop-zone.dragover {
+        background: #e0e0ff;
+    }
+
+    button {
+        margin-top: 20px;
+        padding: 12px 20px;
+        background: #6c63ff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: 600;
+    }
+
+    button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+
+    #status {
+        margin-top: 15px;
+        font-size: 14px;
+        color: #444;
+    }
+</style>
+
+</head>
+<body>
+
+<div class="container">
+    <h2>Word to PDF Converter</h2>
+    <p>No upload — conversion happens 100% in your browser.</p>
+
+    <div id="drop-zone">
+        <strong>Click or Drag & Drop a .docx file here</strong>
+    </div>
+
+    <button id="convertBtn" disabled>Convert to PDF</button>
+
+    <div id="status"></div>
+</div>
+
+<script>
+    let selectedFile = null;
+
+    const dropZone = document.getElementById("drop-zone");
+    const convertBtn = document.getElementById("convertBtn");
+    const statusText = document.getElementById("status");
+
+    dropZone.onclick = () => {
+        let input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".docx";
+        input.onchange = e => {
+            selectedFile = e.target.files[0];
+            dropZone.innerHTML = selectedFile.name;
+            convertBtn.disabled = false;
+        };
+        input.click();
+    };
+
+    dropZone.addEventListener("dragover", e => {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", e => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        selectedFile = e.dataTransfer.files[0];
+        dropZone.innerHTML = selectedFile.name;
+        convertBtn.disabled = false;
+    });
+
+    async function convertToPDF() {
+        if (!selectedFile) return;
+
+        statusText.innerHTML = "Converting... please wait.";
+
+        const arrayBuffer = await selectedFile.arrayBuffer();
+        const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ unit: "pt", format: "a4" });
+
+        pdf.html(htmlResult.value, {
+            callback: function (pdf) {
+                pdf.save(selectedFile.name.replace(".docx", ".pdf"));
+                statusText.innerHTML = "Done! PDF downloaded 🎉";
+            },
+            x: 20,
+            y: 20
+        });
+    }
+
+    convertBtn.onclick = convertToPDF;
+</script>
+
+</body>
+</html>
